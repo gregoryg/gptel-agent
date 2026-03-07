@@ -600,7 +600,7 @@ diagnostics."
             (goto-char from)
             (when (looking-at "^ *```\\(diff\\|patch\\)\\s-*\n")
               (delete-region (match-beginning 0) (match-end 0))))
-          (skip-chars-backward " \t\r\n") (forward-line 0)
+          (skip-chars-backward " \t\r\n`")
           (when (looking-at-p "^ *```\\s-*\\'")
             (delete-region (line-beginning-position) (line-end-position)))
           (setq description "Patch")
