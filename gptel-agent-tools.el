@@ -65,6 +65,24 @@ Default: 400 KB."
   :type 'integer
   :group 'gptel-agent)
 
+(defcustom gptel-agent-preset nil
+  "gptel preset to apply when calling sub-agents.
+
+If you want sub-agent calls to use a different backend or (typically
+smaller or cheaper) model from the main LLM in use, you can specify it
+here, along with any other gptel settings.
+
+It can specified as the name (a symbol) of a preset defined with
+`gptel-make-preset', or as a plist with preset keys like :backend and
+:model.  See this function for recognized keys and types.
+
+Note that you can also specify these parameters per-agent in the agent
+files, in the Markdown frontmatter or Org properties.  Agent-specific
+parameters take precedence over this value."
+  :type '(choice (symbol :tag "Name of preset")
+                 (plist  :tag "Preset plist spec"))
+  :group 'gptel-agent)
+
 ;;; Tool use preview
 (defun gptel-agent--confirm-overlay (from to &optional no-hide)
   "Set up tool call preview overlay FROM TO.
@@ -1332,12 +1350,21 @@ ARG-VALUES is a list: (type description prompt)"
                 (cons (1- (point)) (point))
               (cons (line-beginning-position) (line-end-position)))))
          (ov (make-overlay (car bounds) (cdr bounds) nil t))
+         (model
+          (propertize (concat (gptel--model-name gptel-model))
+                      'face 'font-lock-comment-face))
          (msg (concat
                (unless (eq (char-after (car bounds)) 10) "\n")
                "\n" gptel-agent--hrule
                (propertize (concat (capitalize agent-type) " Task: ")
                            'face 'font-lock-escape-face)
-               (propertize description 'face 'font-lock-doc-face) "\n")))
+               (propertize description 'face 'font-lock-doc-face)
+               (propertize
+                " " 'display
+                (if (fboundp 'string-pixel-width)
+                    `(space :align-to (- right (,(string-pixel-width model))))
+                  `(space :align-to (- right ,(+ 5 (string-width model))))))
+               model "\n")))
     (prog1 ov
       (overlay-put ov 'gptel-agent t)
       (overlay-put ov 'count 0)
@@ -1358,8 +1385,13 @@ PROMPT is the detailed prompt instructing the agent on what is required."
   (gptel-with-preset
       (nconc (list :include-reasoning nil
                    :use-tools t
-                   :context nil)        ;Can be overriden by agent
-             (cdr (assoc agent-type gptel-agent--agents)))
+                   :context nil)       ;Can be overriden by agent
+              (and gptel-agent-preset
+                   (copy-sequence
+                    (cl-etypecase gptel-agent-preset
+                      (symbol (gptel-get-preset gptel-agent-preset))
+                      (plist gptel-agent-preset))))
+              (cdr (assoc agent-type gptel-agent--agents)))
     (let* ((info (gptel-fsm-info gptel--fsm-last))
            (where (or (plist-get info :tracking-marker)
                       (plist-get info :position)))
